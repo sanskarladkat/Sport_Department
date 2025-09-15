@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sports Achievements Dashboard</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+
+    <style>
+        /* (Your existing CSS styles remain here) */
+        :root { --bg-color: #f4f7fc; --card-color: #ffffff; --text-color: #333333; --header-color: #1a237e; --shadow-color: rgba(0, 0, 0, 0.05); --border-color: #e0e0e0; }
+        body.dark-theme { --bg-color: #121212; --card-color: #1e1e1e; --text-color: #e0e0e0; --header-color: #bb86fc; --shadow-color: rgba(255, 255, 255, 0.05); --border-color: #333; }
+        body { font-family: 'Poppins', sans-serif; background-color: var(--bg-color); color: var(--text-color); margin: 0; padding: 20px; transition: background-color 0.3s, color 0.3s; }
+        .container { max-width: 1400px; margin: auto; display: flex; flex-direction: column; gap: 20px; }
+        header { background: var(--card-color); padding: 15px 20px; border-radius: 10px; box-shadow: 0 4px 12px var(--shadow-color); text-align: center; display: flex; justify-content: space-between; align-items: center; }
+        header h1 { margin: 0; color: var(--header-color); font-weight: 700; }
+        .header-buttons { display: flex; gap: 10px; }
+        .theme-switcher, .reset-button { background-color: transparent; border: 1px solid var(--header-color); border-radius: 20px; padding: 8px 12px; cursor: pointer; font-size: 14px; color: var(--header-color); }
+        .kpi-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
+        .kpi-card { background: var(--card-color); padding: 25px; border-radius: 10px; box-shadow: 0 4px 12px var(--shadow-color); text-align: center; }
+        .kpi-card .value { font-size: 2.5em; font-weight: 700; color: var(--header-color); margin: 0; }
+        .kpi-card .label { font-size: 1em; color: var(--text-color); opacity: 0.7; margin-top: 5px; }
+        .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(450px, 1fr)); gap: 20px; } /* Adjusted minmax for better layout */
+        .chart-card { background: var(--card-color); padding: 20px; border-radius: 10px; box-shadow: 0 4px 12px var(--shadow-color); min-height: 400px; display: flex; flex-direction: column; }
+        .chart-card h3 { margin-top: 0; margin-bottom: 20px; text-align: center; color: var(--text-color); font-weight: 600; }
+        .apexcharts-yaxis-label { white-space: nowrap !important; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>Sports Achievements Dashboard (2024-25)</h1>
+            <div class="header-buttons">
+                <button id="resetFiltersBtn" class="reset-button" style="display: none;">Reset Filters</button>
+                <button id="themeSwitcher" class="theme-switcher">Change Theme</button>
+            </div>
+        </header>
+
+        <div class="kpi-container">
+            <div class="kpi-card"><p class="value" id="totalAchievementsValue">0</p><p class="label">Total Achievements</p></div>
+            <div class="kpi-card"><p class="value" id="totalAthletesValue">0</p><p class="label">Total Athletes</p></div>
+            <div class="kpi-card"><p class="value" id="totalPointsValue">0</p><p class="label">Total Points</p></div>
+            <div class="kpi-card"><p class="value" id="uniqueSportsValue">0</p><p class="label">Unique Sports</p></div>
+        </div>
+        
+        <div class="charts-grid">
+            <div class="chart-card"><h3 >Top 5 Achievement Types</h3><div id="achievementTypesChart"></div></div>
+            <div class="chart-card"><h3 >Gender Distribution of Athletes</h3><div id="genderDistributionChart"></div></div>
+            <div class="chart-card"><h3 >School-wise Participation</h3><div id="schoolParticipationChart"></div></div>
+            <div class="chart-card"><h3 >Top 6 Popular Sports</h3><div id="popularSportsChart"></div></div>
+            
+            <div class="chart-card"><h3 >All Achievements</h3><div id="achievementPieChart"></div></div>
+            <div class="chart-card"><h3 >All Sports Participated by Athletes</h3><div id="sportsPieChart"></div></div>
+
+            <div class="chart-card" style="grid-column: 1 / -1;"><h3 >Gender-wise Participation in Sport</h3><div id="sportByGenderChart"></div></div>
+        </div>
+    </div>
+
+    <script>
+        // --- (Your existing global variables and theme/filter logic) ---
+        let charts = {};
+        let activeFilters = {}; 
+        const themeSwitcher = document.getElementById('themeSwitcher');
+        const resetBtn = document.getElementById('resetFiltersBtn');
+        // (Listeners and functions for theme/filter remain the same)
+
+        async function fetchDataAndRenderCharts() {
+            updateResetButtonVisibility();
+            const params = new URLSearchParams(activeFilters);
+            const apiUrl = `/api/data?${params.toString()}`;
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) throw new Error(`Server responded with status ${response.status}`);
+                const data = await response.json();
+                if (data.error) throw new Error(data.error);
+
+                Object.values(charts).forEach(chart => chart?.destroy());
+                charts = {};
+
+                updateKpiCards(data.kpiMetrics);
+                renderSchoolChart(data.schoolParticipation);
+                renderGenderChart(data.genderDistribution);
+                renderAchievementTypesBarChart(data.achievementTypesBar);
+                renderPopularSportsBarChart(data.popularSportsBar);
+                renderSportByGenderChart(data.sportByGender);
+
+                renderAchievementPieChart(data.achievementTypesPie);
+                renderSportsPieChart(data.sportsPie);
+
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                document.querySelector('.container').innerHTML = `<h1>Error: Could not load dashboard data.</h1><p>${error.message}. Please check if the Python server is running and the Excel file is correct.</p>`;
+            }
+        }
+        
+        // --- (Keep existing functions: updateKpiCards, theme logic, filter logic, etc.) ---
+        
+        // --- CHART DEFINITIONS ---
+
+        function renderAchievementTypesBarChart(d) {
+             const options = { series: [{ name: 'Count', data: d.map(i => i.Count) }], chart: { type: 'bar', height: 350 }, plotOptions: { bar: { horizontal: true } }, xaxis: { categories: d.map(i => i.Type) }, tooltip: { y: { title: { formatter: () => 'Count:' } } }, theme: { mode: getCurrentChartTheme() } };
+            charts.achievementBar = new ApexCharts(document.querySelector("#achievementTypesChart"), options);
+            charts.achievementBar.render();
+        }
+
+        function renderPopularSportsBarChart(d) {
+            const options = { series: [{ name: 'Participants', data: d.map(i => i.Participants) }], chart: { type: 'bar', height: 350 }, plotOptions: { bar: { horizontal: true, distributed: true } }, xaxis: { categories: d.map(i => i.Sport) }, legend: { show: false }, theme: { mode: getCurrentChartTheme() } };
+            charts.popularBar = new ApexCharts(document.querySelector("#popularSportsChart"), options);
+            charts.popularBar.render();
+        }
+
+        // UPDATED: Increased height for achievement pie chart
+        function renderAchievementPieChart(d) {
+            const options = {
+                series: d.series,
+                chart: { type: 'pie', height: 450 }, /* Increased height */
+                labels: d.labels,
+                legend: { position: 'bottom' },
+                theme: { mode: getCurrentChartTheme() }
+            };
+            charts.achievementPie = new ApexCharts(document.querySelector("#achievementPieChart"), options);
+            charts.achievementPie.render();
+        }
+
+        // UPDATED: Increased height for sports pie chart
+        function renderSportsPieChart(d) {
+            const options = {
+                series: d.series,
+                chart: { type: 'pie', height: 450 }, /* Increased height */
+                labels: d.labels,
+                legend: { position: 'bottom' },
+                theme: { mode: getCurrentChartTheme() }
+            };
+            charts.sportsPie = new ApexCharts(document.querySelector("#sportsPieChart"), options);
+            charts.sportsPie.render();
+        }
+
+        // --- (Keep the other render...Chart functions as they were) ---
+        // (The full functions are included below for convenience)
+        const currentTheme = localStorage.getItem('theme'); if (currentTheme) document.body.classList.add(currentTheme); themeSwitcher.addEventListener('click', () => { document.body.classList.toggle('dark-theme'); let theme = document.body.classList.contains('dark-theme') ? 'dark-theme' : ''; localStorage.setItem('theme', theme); updateAllChartThemes(); }); resetBtn.addEventListener('click', () => { activeFilters = {}; fetchDataAndRenderCharts(); }); function applyFilter(key, value) { if (activeFilters[key] === value) { delete activeFilters[key]; } else { activeFilters[key] = value; } fetchDataAndRenderCharts(); } function updateResetButtonVisibility() { resetBtn.style.display = Object.keys(activeFilters).length > 0 ? 'inline-block' : 'none'; } document.addEventListener('DOMContentLoaded', fetchDataAndRenderCharts); function updateKpiCards(kpiData) { document.getElementById('totalAchievementsValue').innerText = kpiData.totalAchievements.toLocaleString(); document.getElementById('totalAthletesValue').innerText = kpiData.totalAthletes.toLocaleString(); document.getElementById('totalPointsValue').innerText = kpiData.totalPoints.toLocaleString(); document.getElementById('uniqueSportsValue').innerText = kpiData.uniqueSports.toLocaleString(); } function getCurrentChartTheme() { return document.body.classList.contains('dark-theme') ? 'dark' : 'light'; } function updateAllChartThemes() { const newTheme = { theme: { mode: getCurrentChartTheme() } }; Object.values(charts).forEach(chart => chart?.updateOptions(newTheme)); }
+        function renderSchoolChart(d) { const options = { series: [{ name: 'Achievements', data: d.map(i => i.Achievements) }], chart: { type: 'bar', height: 350, events: { dataPointSelection: (e, chart, config) => { const selectedSchool = config.w.globals.labels[config.dataPointIndex]; applyFilter('School', selectedSchool); } } }, plotOptions: { bar: { horizontal: true, barHeight: '60%', distributed: true } }, dataLabels: { enabled: true, textAnchor: 'end', offsetX: -10, style: { colors: ['#fff'] }, formatter: (v) => v }, xaxis: { categories: d.map(i => i.School) }, yaxis: { labels: { show: true, style: { colors: [getCurrentChartTheme() === 'light' ? '#333' : '#eee'] } } }, legend: { show: false }, tooltip: { y: { formatter: (v, { seriesIndex, dataPointIndex, w }) => { const schoolName = w.globals.labels[dataPointIndex]; return `${schoolName}: ${v} Achievements`; }, title: { formatter: () => '' } } }, theme: { mode: getCurrentChartTheme() } }; charts.school = new ApexCharts(document.querySelector("#schoolParticipationChart"), options); charts.school.render(); }
+        function renderGenderChart(d) { const options = { series: d.series, chart: { type: 'donut', height: 350, events: { dataPointSelection: (e, chart, config) => { const selectedGender = config.w.globals.labels[config.dataPointIndex]; applyFilter('GENDER', selectedGender); } } }, labels: d.labels, plotOptions: { pie: { donut: { labels: { show: true, total: { show: true, label: 'Total Athletes' } } } } }, legend: { position: 'bottom' }, theme: { mode: getCurrentChartTheme() } }; charts.gender = new ApexCharts(document.querySelector("#genderDistributionChart"), options); charts.gender.render(); }
+        function renderSportByGenderChart(d) { const options = { series: d.series, chart: { type: 'bar', height: 500, stacked: true }, plotOptions: { bar: { horizontal: true } }, stroke: { width: 1, colors: ['#fff'] }, xaxis: { categories: d.categories }, yaxis: { title: { text: undefined } }, tooltip: { y: { formatter: (v) => v + " athletes" } }, fill: { opacity: 1 }, legend: { position: 'top', horizontalAlign: 'left' }, theme: { mode: getCurrentChartTheme() } }; charts.sportGender = new ApexCharts(document.querySelector("#sportByGenderChart"), options); charts.sportGender.render(); }
+    </script>
+</body>
+</html>
